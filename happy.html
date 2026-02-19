@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>생일 강화: 인생역전</title>
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background-color: #1a1a1a; color: #ffffff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; overflow: hidden; touch-action: manipulation; }
+        .container { text-align: center; width: 100%; max-width: 400px; padding: 20px; }
+        
+        h1 { font-size: 1.2rem; color: #ffeb3b; opacity: 0.9; }
+        
+        /* 레벨 표시: 섬광 대신 부드러운 색상 변화 */
+        .level-box { font-size: 5.5rem; font-weight: 900; margin: 15px 0; transition: color 0.3s, transform 0.2s; }
+        .rank-normal { color: #fff; }
+        .rank-danger { color: #ffca28; }
+        .rank-hardcore { color: #ff5252; }
+
+        .reward-box { background: #2a2a2a; padding: 20px; border-radius: 15px; margin-bottom: 20px; border: 1px solid #3d3d3d; }
+        .reward-text { font-size: 1.3rem; font-weight: bold; }
+
+        .info-panel { display: flex; justify-content: space-between; margin-bottom: 25px; }
+        .info-item { background: #252525; padding: 12px; border-radius: 10px; width: 46%; border: 1px solid #333; }
+        .label { font-size: 0.75rem; color: #888; display: block; margin-bottom: 5px; }
+        .val { font-size: 1.1rem; font-weight: bold; }
+        .val-destruct { color: #ff5252; }
+
+        .btn-enhance { 
+            background: #444; border: 1px solid #555; width: 100%; padding: 20px; font-size: 1.5rem; 
+            font-weight: bold; color: white; border-radius: 12px; cursor: pointer; transition: 0.2s;
+        }
+        /* 강화 시도 시 버튼 색상만 살짝 변경 */
+        .btn-enhance:active { background: #555; transform: scale(0.98); }
+        .btn-enhance:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        /* 부드러운 진동 효과 (눈 안 아픔) */
+        .vibrate { animation: vibrate 0.3s linear; }
+        @keyframes vibrate {
+            0% { transform: translate(0); }
+            20% { transform: translate(-3px, 2px); }
+            40% { transform: translate(-3px, -2px); }
+            60% { transform: translate(3px, 2px); }
+            80% { transform: translate(3px, -2px); }
+            100% { transform: translate(0); }
+        }
+
+        /* 파괴 시 연출: 빨간 깜빡임 대신 글자가 잠시 투명해졌다가 나타남 */
+        .destroy-anim { animation: fade-out-in 0.5s ease; }
+        @keyframes fade-out-in {
+            0% { opacity: 1; color: #ff5252; }
+            50% { opacity: 0; transform: scale(0.8); }
+            100% { opacity: 1; color: #fff; }
+        }
+
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>🎂 생일 강화 도전</h1>
+        <div class="level-box rank-normal" id="levelDisplay">+0</div>
+        
+        <div class="reward-box">
+            <div class="reward-text" id="rewardDisplay">불러오는 중...</div>
+        </div>
+
+        <div class="info-panel">
+            <div class="info-item">
+                <span class="label">성공 확률</span>
+                <span class="val" id="probSuccess">--%</span>
+            </div>
+            <div class="info-item">
+                <span class="label">파괴 확률</span>
+                <span class="val val-destruct" id="probDestruct">--%</span>
+            </div>
+        </div>
+
+        <button class="btn-enhance" id="btnEnhance" onclick="tryEnhance()">강화 시도 🔨</button>
+        <p id="statusMsg" style="margin-top:20px; font-size:0.85rem; color:#888;">실패 시 유지, 파괴 시 0강 초기화 (자동 저장됨)</p>
+    </div>
+
+    <div class="modal" id="successModal">
+        <h2 style="color:#ffeb3b; font-size:2.5rem;">👑 전설 달성 👑</h2>
+        <p id="finalContent" style="padding:20px; line-height:1.6;">진짜 선물을 확인하세요!</p>
+    </div>
+
+    <script>
+        let currentLevel = parseInt(localStorage.getItem('birthdayLevel')) || 0;
+        const rewards = ["시작 전", "공기 1회", "박수 3회", "악수 1회", "하이파이브 5회", "물 한 컵", "추파춥스", "과자 1개", "아이스크림", "편의점 1천원", "스타벅스", "편의점 2천원", "배달 3천원", "치킨 사이드", "3천원 송금", "4천원 송금", "4.5천원 송금", "하루 심부름", "💰 5,000원", "🔥 10,000원", "👑 반전 보상"];
+
+        function getProbabilities(level) {
+            let success = Math.max(100 - (level * 5), 5);
+            let destruct = 0;
+            if (level >= 5 && level < 10) destruct = 5;
+            else if (level >= 10 && level < 15) destruct = 15;
+            else if (level >= 15) destruct = 25;
+            else if (level >= 18) destruct = 35;
+            return { success, destruct };
+        }
+
+        function updateUI() {
+            const levelEl = document.getElementById('levelDisplay');
+            levelEl.innerText = `+${currentLevel}`;
+            document.getElementById('rewardDisplay').innerText = rewards[currentLevel];
+            
+            const { success, destruct } = getProbabilities(currentLevel);
+            document.getElementById('probSuccess').innerText = `${success}%`;
+            document.getElementById('probDestruct').innerText = `${destruct}%`;
+
+            levelEl.className = 'level-box';
+            if (destruct >= 30) levelEl.classList.add('rank-hardcore');
+            else if (destruct >= 10) levelEl.classList.add('rank-danger');
+            else levelEl.classList.add('rank-normal');
+
+            if (currentLevel >= 20) {
+                document.getElementById('successModal').style.display = 'flex';
+            }
+            localStorage.setItem('birthdayLevel', currentLevel);
+        }
+
+        function tryEnhance() {
+            const btn = document.getElementById('btnEnhance');
+            const levelEl = document.getElementById('levelDisplay');
+            const statusMsg = document.getElementById('statusMsg');
+            
+            btn.disabled = true;
+            statusMsg.innerText = "강화 시도 중...";
+            levelEl.classList.remove('vibrate', 'destroy-anim');
+
+            setTimeout(() => {
+                const { success, destruct } = getProbabilities(currentLevel);
+                const rand = Math.random() * 100;
+
+                if (rand <= success) {
+                    currentLevel++;
+                    statusMsg.innerText = "강화 성공! 🎉";
+                    statusMsg.style.color = "#81c784";
+                } else if (rand <= (success + destruct)) {
+                    // 파괴: 눈 아픈 플래시 대신 글자가 사라졌다 나타나는 효과
+                    currentLevel = 0;
+                    levelEl.classList.add('destroy-anim');
+                    statusMsg.innerText = "파괴되었습니다. (0강 초기화) 💀";
+                    statusMsg.style.color = "#e57373";
+                } else {
+                    // 실패: 가벼운 진동만
+                    levelEl.classList.add('vibrate');
+                    statusMsg.innerText = "실패! 다행히 레벨이 유지되었습니다. 🛡️";
+                    statusMsg.style.color = "#9e9e9e";
+                }
+
+                updateUI();
+                btn.disabled = false;
+            }, 1200);
+        }
+
+        updateUI();
+    </script>
+</body>
+</html>
